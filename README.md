@@ -5,6 +5,7 @@ Toronto AI Hackathon project to bring copilot completion to any web app / page.
 ## Setup
 
 ```bash
+export REACT_APP_OPENAI_API_KEY=<your key>
 npm install
 npm run build
 ```
