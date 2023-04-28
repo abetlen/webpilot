@@ -36,7 +36,13 @@ async function autocomplete(prompt: string, signal) {
     .then((res) => res.choices[0].message.content);
 }
 
-function getCursorXY(inputElement) {
+function getCursorXY(inputElement: HTMLInputElement | HTMLTextAreaElement) {
+  if (
+    inputElement.selectionStart === null ||
+    inputElement.selectionEnd === null
+  ) {
+    return { x: 0, y: 0 };
+  }
   const fontSize = window
     .getComputedStyle(inputElement)
     .getPropertyValue("font-size");
@@ -82,7 +88,7 @@ function getCursorXY(inputElement) {
     inputElement.selectionStart
   );
   const inputLines = inputValue.split("\n");
-  const inputTexts = [];
+  const inputTexts: (Text | HTMLElement)[] = [];
 
   for (let i = 0; i < inputLines.length; i++) {
     if (i !== 0) {
@@ -140,7 +146,11 @@ const root = createRoot(container!);
 
 function useCursorPosition() {
   const targetRef = useRef<HTMLElement | null>(null);
-  const [cursorPosition, setCursorPosition] = useState({
+  const [cursorPosition, setCursorPosition] = useState<{
+    target: HTMLElement | null;
+    x: Number;
+    y: Number;
+  }>({
     target: null,
     x: 0,
     y: 0,
@@ -148,10 +158,10 @@ function useCursorPosition() {
 
   useEffect(() => {
     const updateCursorPosition = (ev) => {
-      const target = ev.target as HTMLElement;
-      if (target && isTextInput(target)) {
-        targetRef.current = target;
-        if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
+      if (ev.target && isTextInput(ev.target)) {
+        targetRef.current = ev.target;
+        if (ev.target.tagName === "TEXTAREA" || ev.target.tagName === "INPUT") {
+          const target = ev.target as HTMLInputElement | HTMLTextAreaElement;
           const { x, y } = getCursorXY(target);
           setCursorPosition({ target, x, y });
         }
@@ -159,9 +169,14 @@ function useCursorPosition() {
     };
 
     const onScroll = () => {
-      const target = targetRef.current;
-      if (target && isTextInput(target)) {
-        if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
+      if (targetRef.current && isTextInput(targetRef.current)) {
+        if (
+          targetRef.current.tagName === "TEXTAREA" ||
+          targetRef.current.tagName === "INPUT"
+        ) {
+          const target = targetRef.current as
+            | HTMLInputElement
+            | HTMLTextAreaElement;
           const { x, y } = getCursorXY(target);
           setCursorPosition((cursorPosition) => ({ ...cursorPosition, x, y }));
         }
@@ -239,33 +254,23 @@ function App() {
     const handleTab = (ev) => {
       if (ev.key === "Tab") {
         ev.preventDefault();
-        if (suggestion) {
-          const element = target;
-          if (element) {
-            if (element.tagName === "TEXTAREA") {
-              const textArea = element as HTMLTextAreaElement;
-              const { selectionStart, selectionEnd } = textArea;
-              const value = textArea.value;
-              const before = value.substring(0, selectionStart);
-              const after = value.substring(selectionEnd);
-              textArea.value = `${before}${suggestion}${after}`;
-              textArea.selectionStart = selectionStart + suggestion.length;
-              textArea.selectionEnd = selectionStart + suggestion.length;
-
-              setSuggestion("");
+        if (suggestion && target) {
+          if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
+            const textAreaOrInput = target as
+              | HTMLTextAreaElement
+              | HTMLInputElement;
+            const { selectionStart, selectionEnd } = textAreaOrInput;
+            if (selectionStart === null || selectionEnd === null) {
+              return;
             }
-            if (element.tagName === "INPUT" && element.type === "text") {
-              const input = element as HTMLInputElement;
-              const { selectionStart, selectionEnd } = input;
-              const value = input.value;
-              const before = value.substring(0, selectionStart);
-              const after = value.substring(selectionEnd);
-              input.value = `${before}${suggestion}${after}`;
-              input.selectionStart = selectionStart + suggestion.length;
-              input.selectionEnd = selectionStart + suggestion.length;
+            const value = textAreaOrInput.value;
+            const before = value.substring(0, selectionStart);
+            const after = value.substring(selectionEnd);
+            textAreaOrInput.value = `${before}${suggestion}${after}`;
+            textAreaOrInput.selectionStart = selectionStart + suggestion.length;
+            textAreaOrInput.selectionEnd = selectionStart + suggestion.length;
 
-              setSuggestion("");
-            }
+            setSuggestion("");
           }
         }
       }
@@ -294,19 +299,19 @@ function App() {
       return;
     }
     const update = (element) => {
-      if (element.tagName === "TEXTAREA") {
-        const textArea = element as HTMLTextAreaElement;
-        const { selectionStart } = textArea;
-        const value = textArea.value;
+      if (element.tagName === "TEXTAREA" || element.tagName === "INPUT") {
+        const textAreaOrInput = element as
+          | HTMLTextAreaElement
+          | HTMLInputElement;
+        const { selectionStart, selectionEnd } = textAreaOrInput;
+        if (selectionStart === null || selectionEnd === null) {
+          return;
+        }
+        const value = textAreaOrInput.value;
         const before = value.substring(0, selectionStart);
-        setContext(before);
-      }
-      if (element.tagName === "INPUT" && element.type === "text") {
-        const input = element as HTMLInputElement;
-        const { selectionStart } = input;
-        const value = input.value;
-        const before = value.substring(0, selectionStart);
-        setContext(before);
+        const after = value.substring(selectionEnd);
+        const context = before;
+        setContext(context);
       }
     };
     const onInput = (ev) => update(ev.target);
