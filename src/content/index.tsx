@@ -342,7 +342,7 @@ function App() {
       {/* Draw border around focused element */}
       {windowFocused && target && (
         <div
-          className="fixed pointer-events-none z-[5000] border border-blue-500"
+          className="fixed pointer-events-none z-[9001] border border-blue-500"
           style={{
             left: target.getBoundingClientRect().left,
             top: target.getBoundingClientRect().top,
@@ -354,7 +354,7 @@ function App() {
       {/* */}
       <div
         ref={rootRef}
-        className="fixed pointer-events-none z-[5000] max-w-prose"
+        className="fixed pointer-events-none z-[9001] max-w-prose"
       >
         {windowFocused && target && isTextInput(target) && (
           <div className="flex justify-between items-center p-2 pointer-events-none bg-gray-50 border border-gray-200 shadow-lg rounded overflow-hidden gap-x-8">
