@@ -115,8 +115,8 @@ function getCursorXY(inputElement) {
   document.body.appendChild(tempElement);
 
   const rect = range.getBoundingClientRect();
-  const x = rect.left - window.scrollX;
-  const y = rect.top + 1.15 * parseFloat(fontSize) - window.scrollY;
+  const x = rect.left - window.scrollX - inputElement.scrollLeft;
+  const y = rect.top + 1.15 * parseFloat(fontSize) - window.scrollY - inputElement.scrollTop;
 
   document.body.removeChild(tempElement);
 
