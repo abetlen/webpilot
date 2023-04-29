@@ -36,6 +36,29 @@ async function autocomplete(prompt: string, signal) {
     .then((res) => res.choices[0].message.content);
 }
 
+function closestContentEditable(element): HTMLElement | null {
+  if (element.isContentEditable) {
+    return element;
+  } else if (element.parentElement) {
+    return closestContentEditable(element.parentElement);
+  } else {
+    return null;
+  }
+}
+
+function descendantOfContentEditable(element): boolean {
+  return closestContentEditable(element) !== null;
+}
+
+function isTextInput(element) {
+  const inputTypes = ["text", "password", "search", "email", "tel", "url"];
+  return (
+    (element.tagName === "INPUT" && inputTypes.includes(element.type)) ||
+    element.tagName === "TEXTAREA" ||
+    descendantOfContentEditable(element)
+  );
+}
+
 function getCursorXY(inputElement: HTMLInputElement | HTMLTextAreaElement) {
   if (
     inputElement.selectionStart === null ||
@@ -133,16 +156,66 @@ function getCursorXY(inputElement: HTMLInputElement | HTMLTextAreaElement) {
   return { x, y };
 }
 
-import React from "react";
-import { useState, useEffect, useRef } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
+function findDeepestElement(root: HTMLElement): HTMLElement {
+  const selection = document.getSelection();
+  let deepest = root;
+  let maxDepth = 0;
 
-const container = document.createElement("div");
-container.setAttribute("id", "webpilot-root");
-document.body.appendChild(container);
+  function traverse(node: Node, depth: number) {
+    if (node instanceof HTMLElement) {
+      if (depth > maxDepth && node.contains(selection.focusNode)) {
+        deepest = node;
+        maxDepth = depth;
+      }
+      for (const childNode of node.childNodes) {
+        traverse(childNode, depth + 1);
+      }
+    }
+  }
 
-const root = createRoot(container!);
+  traverse(root, 0);
+
+  return deepest;
+}
+
+function getCursorXYForEditable(element) {
+  const selection = window.getSelection();
+  const range = selection.getRangeAt(0);
+
+  // Check if the cursor is inside a child element
+  const isCursorInsideChild = range.startContainer !== element;
+  if (isCursorInsideChild) {
+    // Find the deepest element that contains the cursor
+    const deepestElement = findDeepestElement(range.startContainer);
+    range.setStart(deepestElement, range.startOffset);
+  } else {
+    // If the cursor is at the beginning of the root element, add a temporary empty span to get its position
+    if (range.startOffset === 0) {
+      const tempEmptySpan = document.createElement("span");
+      element.insertBefore(tempEmptySpan, element.firstChild);
+      const tempRange = new Range();
+      tempRange.selectNodeContents(tempEmptySpan);
+      range.setStart(tempEmptySpan, 0);
+      selection.removeAllRanges();
+      selection.addRange(tempRange);
+    } else {
+      range.setStart(element, 0);
+    }
+  }
+
+  const tempElement = document.createElement("span");
+  tempElement.textContent = "\u200b";
+  range.insertNode(tempElement);
+
+  const rect = tempElement.getBoundingClientRect();
+  const x = rect.left + element.scrollLeft;
+  const y = rect.top + rect.height + element.scrollTop;
+
+  tempElement.parentNode.removeChild(tempElement);
+  selection.removeAllRanges();
+
+  return { x, y };
+}
 
 function useCursorPosition() {
   const targetRef = useRef<HTMLElement | null>(null);
@@ -165,6 +238,16 @@ function useCursorPosition() {
           const { x, y } = getCursorXY(target);
           setCursorPosition({ target, x, y });
         }
+        if (descendantOfContentEditable(ev.target)) {
+          const contentEditable = closestContentEditable(ev.target);
+          if (!contentEditable) {
+            return;
+          }
+          const element = findDeepestElement(contentEditable);
+          const target = element as HTMLElement;
+          const { x, y } = getCursorXYForEditable(target);
+          setCursorPosition({ target, x, y });
+        }
       }
     };
 
@@ -178,6 +261,18 @@ function useCursorPosition() {
             | HTMLInputElement
             | HTMLTextAreaElement;
           const { x, y } = getCursorXY(target);
+          setCursorPosition((cursorPosition) => ({ ...cursorPosition, x, y }));
+        }
+        if (descendantOfContentEditable(targetRef.current)) {
+          const contentEditable = closestContentEditable(
+            targetRef.current.parentElement
+          );
+          if (!contentEditable) {
+            return;
+          }
+          const element = findDeepestElement(contentEditable);
+          const target = element as HTMLElement;
+          const { x, y } = getCursorXYForEditable(target);
           setCursorPosition((cursorPosition) => ({ ...cursorPosition, x, y }));
         }
       }
@@ -232,13 +327,16 @@ function useWindowFocused() {
   return windowFocused;
 }
 
-function isTextInput(element) {
-  const inputTypes = ["text", "password", "search", "email", "tel", "url"];
-  return (
-    (element.tagName === "INPUT" && inputTypes.includes(element.type)) ||
-    element.tagName === "TEXTAREA"
-  );
-}
+import React from "react";
+import { useState, useEffect, useRef } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+
+const container = document.createElement("div");
+container.setAttribute("id", "webpilot-root");
+document.body.appendChild(container);
+
+const root = createRoot(container!);
 
 function App() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -311,6 +409,14 @@ function App() {
         const before = value.substring(0, selectionStart);
         const after = value.substring(selectionEnd);
         const context = before;
+        setContext(context);
+      }
+      if (descendantOfContentEditable(element)) {
+        const contentEditable = closestContentEditable(element);
+        if (!contentEditable) {
+          return;
+        }
+        const context = contentEditable.innerText;
         setContext(context);
       }
     };
