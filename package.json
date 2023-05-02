@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@dqbd/tiktoken": "^1.0.6",
     "@parcel/config-webextension": "^2.8.3",
